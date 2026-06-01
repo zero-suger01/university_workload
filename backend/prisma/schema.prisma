@@ -1,0 +1,835 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enumerations ─────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  DEPARTMENT_HEAD
+  FACULTY
+}
+
+enum CourseType {
+  LECTURE
+  SEMINAR
+  LAB
+  BOTH
+  OTHER
+}
+
+enum WorkloadStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum WorkloadApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum RequestStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum RequestType {
+  ADD_COURSE
+  REMOVE_COURSE
+  ADJUST_HOURS
+  EXTRA_ACTIVITY
+  OVERLOAD_REQUEST
+  WORKLOAD_DECLINED
+}
+
+enum NotificationType {
+  WORKLOAD_ASSIGNED
+  REQUEST_SUBMITTED
+  REQUEST_APPROVED
+  REQUEST_REJECTED
+  DEADLINE_REMINDER
+  SYSTEM_ALERT
+}
+
+enum AcademicPosition {
+  TEACHING_ASSISTANT
+  LAB_ASSISTANT
+  LECTURER
+  SENIOR_LECTURER
+  ASSISTANT_PROFESSOR
+  ASSOCIATE_PROFESSOR
+  PROFESSOR
+  PROFESSOR_IN_PRACTICE
+  VISITING_PROFESSOR
+  VISITING_FULLTIME_PROFESSOR
+  VISITING_ASSOCIATE_PROFESSOR
+  ADJUNCT_PROFESSOR
+  HEAD_OF_DEPARTMENT
+  ASSOCIATE_DEAN
+  ASSISTANT_DEAN
+  DEAN
+  DIRECTOR
+  ASSOCIATE_DIRECTOR
+  POSTDOC
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum DegreeLevel {
+  BACHELOR
+  MASTER
+  PHD
+}
+
+enum TeachingLanguage {
+  UZB
+  UZB_ENG
+  RUS_ENG
+}
+
+enum PlanningStatus {
+  DRAFT
+  CONFIRMED
+  PUBLISHED
+}
+
+enum AssignType {
+  LECTURE
+  TUTORIAL
+  LAB
+}
+
+enum RoomType {
+  LECTURE_HALL
+  SEMINAR_ROOM
+  COMPUTER_LAB
+  CHEMISTRY_LAB
+  PHYSICS_LAB
+  CONFERENCE_HALL
+  ACTIVE_LEARNING
+  HYBRID
+}
+
+enum CQIStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REVISION_NEEDED
+}
+
+// ─── Core Entities ────────────────────────────────────────────────────────────
+
+model Department {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  code        String   @unique
+  description String?
+  // Standard weekly teaching-load norm for this department (hours/week).
+  // Used in vacancy forecasting: staffNeeded = ceil(uncoveredHours / (avgWeeklyLoad × weekCount))
+  avgWeeklyLoad Float    @default(30)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users          User[]
+  courses        Course[]
+  programs       Program[]
+  staffUnits     StaffUnit[]
+  vacancyRecords VacancyRecord[]
+  rooms          Room[]
+}
+
+model User {
+  id             String           @id @default(cuid())
+  employeeId     String           @unique
+  email          String           @unique
+  passwordHash   String
+  firstName      String
+  lastName       String
+  role           Role             @default(FACULTY)
+  profilePhoto   String?
+  phoneNumber    String?
+  isActive       Boolean          @default(true)
+  maxWeeklyHours Int              @default(40)
+  minWeeklyHours Int              @default(12)
+
+  academicPosition AcademicPosition?
+  employmentType   EmploymentType    @default(FULL_TIME)
+  academicDegree   String?
+  adminPosition    String?
+  gender           Gender?
+  programId        String?
+
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  program      Program?   @relation(fields: [programId], references: [id])
+
+  facultyDepartment String?
+
+  tempPassword         String?   // plain-text initial password for admin Password Directory report
+  refreshToken         String?
+  passwordResetToken   String?
+  passwordResetExpires DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workloadRecords      WorkloadRecord[]
+  assignedWorkloads    WorkloadRecord[]      @relation("WorkloadAssignedBy")
+  workloadAssignments  WorkloadAssignment[]
+  editHistory          WorkloadEditHistory[]
+  cqiReports           CQIReport[]
+  submittedRequests    Request[]             @relation("RequestSubmitter")
+  reviewedRequests     Request[]             @relation("RequestReviewer")
+  notifications        Notification[]
+  auditLogs            AuditLog[]
+  generatedReports     Report[]
+
+  @@index([role])
+  @@index([departmentId])
+  @@index([academicPosition])
+  @@index([employmentType])
+}
+
+model Course {
+  id          String     @id @default(cuid())
+  courseCode  String     @unique
+  title       String
+  description String?
+  type        CourseType
+  creditUnits Float
+  weeklyHours Float
+  // breakdown: weeklyLectureHours + weeklyTutorialHours + weeklyLabHours = weeklyHours
+  weeklyLectureHours  Float @default(0)
+  weeklyTutorialHours Float @default(0)
+  weeklyLabHours      Float @default(0)
+  maxStudents Int     @default(40)
+  isActive    Boolean @default(true)
+
+  ectsCredits     Float?
+  usCreditHours   Float?
+  subjectBoard    String?
+  prerequisites   String?
+  textbook        String?
+  courseDuration  String?
+  semesterOffered String?
+  degreeLevel     String?
+
+  // Learning outcomes → used in CQI
+  learningOutcome1 String?
+  learningOutcome2 String?
+  learningOutcome3 String?
+  learningOutcome4 String?
+  learningOutcome5 String?
+  learningOutcome6 String?
+  learningOutcome7  String?
+  learningOutcome8  String?
+  learningOutcome9  String?
+  learningOutcome10 String?
+  learningOutcome11 String?
+  learningOutcome12 String?
+  learningOutcome13 String?
+  learningOutcome14 String?
+  syllabusTemplate  String?
+  term              String?
+
+  // Extended catalog fields (rows 3-5 of the course form)
+  accreditationArea   String?
+  partOfTerm          String?
+  format              String?
+  gradeStatus         String?
+  seatsAvailable      Int?
+  waitlistTotal       Int?
+  lastDayToRegister   String?
+  lastDayToAddDrop    String?
+  instructorInfo      String?
+  meetingInfo         String?
+  notes               String?
+
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  // Responsible Department is separate from School/Department
+  responsibleDepartment String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workloadRecords WorkloadRecord[]
+  curriculumItems CurriculumItem[]
+  planningRows    PlanningRow[]
+  objectives      CourseObjective[]
+  cqiReports      CQIReport[]
+
+  @@index([departmentId])
+  @@index([type])
+  @@index([subjectBoard])
+  @@index([isActive, departmentId])
+}
+
+model Semester {
+  id           String   @id @default(cuid())
+  name         String
+  academicYear String
+  term         Int      // 1 = Fall, 2 = Spring
+  startDate    DateTime
+  endDate      DateTime
+  isActive     Boolean  @default(false)
+  isCurrent    Boolean  @default(false)
+  weekCount    Int      @default(16)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workloadRecords WorkloadRecord[]
+  reports         Report[]
+  planningRows    PlanningRow[]
+  vacancyRecords  VacancyRecord[]
+  staffUnits      StaffUnit[]
+  studentCohorts  StudentCohort[]
+  cqiReports      CQIReport[]
+
+  @@unique([academicYear, term])
+}
+
+// ─── Rooms ────────────────────────────────────────────────────────────────────
+
+model Room {
+  id           String   @id @default(cuid())
+  code         String   @unique  // e.g. "INST-3-01"
+  number       String
+  capacity     Int
+  building     String
+  buildingNo   Int?
+  roomType     RoomType @default(SEMINAR_ROOM)
+  description  String?
+  isAvailable  Boolean  @default(true)
+
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([roomType])
+  @@index([departmentId])
+}
+
+// ─── Academic Structure ───────────────────────────────────────────────────────
+
+model Program {
+  id          String      @id @default(cuid())
+  name        String
+  code        String      @unique
+  degreeLevel DegreeLevel @default(BACHELOR)
+  description String?
+  isActive    Boolean     @default(true)
+
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  curricula      Curriculum[]
+  planningRows   PlanningRow[]
+  groups         Group[]
+  studentCohorts StudentCohort[]
+  users          User[]
+
+  @@index([departmentId])
+  @@index([degreeLevel])
+}
+
+model Curriculum {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  isActive    Boolean @default(true)
+
+  programId String
+  program   Program @relation(fields: [programId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items CurriculumItem[]
+
+  @@index([programId])
+}
+
+model CurriculumItem {
+  id             String  @id @default(cuid())
+  semesterNumber Int
+  isRequired     Boolean @default(true)
+
+  curriculumId String
+  curriculum   Curriculum @relation(fields: [curriculumId], references: [id])
+
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([curriculumId, courseId, semesterNumber])
+  @@index([curriculumId])
+  @@index([courseId])
+}
+
+// ─── Student Cohorts ──────────────────────────────────────────────────────────
+
+model StudentCohort {
+  id           String           @id @default(cuid())
+  yearOfStudy  Int
+  language     TeachingLanguage
+  studentCount Int              @default(0)
+  groupCodes   String[]         // ["FM1","FM2","FM3"]
+  notes        String?
+
+  programId  String
+  program    Program  @relation(fields: [programId], references: [id])
+  semesterId String
+  semester   Semester @relation(fields: [semesterId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([programId, semesterId])
+}
+
+// ─── Semester Planning ────────────────────────────────────────────────────────
+
+model PlanningRow {
+  id               String           @id @default(cuid())
+  yearOfStudy      Int
+  semesterNumber   Int
+  teachingLanguage TeachingLanguage @default(UZB)
+  studentCount     Int              @default(0)
+  groupNumbers     String?          // "FM1,FM2,FM3" — group names string
+  lectureGroups    Int              @default(1)
+  tutorialGroups   Int              @default(1)
+  totalSmallGroups Int              @default(0)
+  labGroups        Int              @default(0)
+  jointWith        String?
+
+  // Calculated fields (auto on save)
+  totalRequiredHours    Float @default(0)  // total across all types
+  totalLecRequired      Float @default(0)  // weeklyLecHrs × lectureGroups × weekCount
+  totalTutRequired      Float @default(0)  // weeklyTutHrs × tutorialGroups × weekCount
+  totalLabRequired      Float @default(0)  // weeklyLabHrs × labGroups × weekCount
+  totalCoveredHours     Float @default(0)  // sum of WorkloadAssignments
+  totalLecCovered       Float @default(0)
+  totalTutCovered       Float @default(0)
+  totalLabCovered       Float @default(0)
+  uncoveredHours        Float @default(0)
+
+  confirmedByResDept Boolean @default(false)
+  status PlanningStatus @default(DRAFT)
+  notes  String?
+
+  courseId   String
+  course     Course   @relation(fields: [courseId], references: [id])
+  programId  String
+  program    Program  @relation(fields: [programId], references: [id])
+  semesterId String
+  semester   Semester @relation(fields: [semesterId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  groups              Group[]
+  workloadRecords     WorkloadRecord[]
+  workloadAssignments WorkloadAssignment[]
+
+  @@index([semesterId, programId])
+  @@index([courseId, semesterId])
+  @@index([status])
+}
+
+// ─── Workload Assignments (Planning → Faculty) ────────────────────────────────
+
+model WorkloadAssignment {
+  id           String     @id @default(cuid())
+  assignType   AssignType // LECTURE | TUTORIAL | LAB
+  groupsCount  Int        @default(1)   // how many groups this faculty covers
+  hoursPerWeek Float      @default(0)   // calculated: weeklyHrs × groupsCount
+  totalHours   Float      @default(0)   // hoursPerWeek × weekCount
+  notes        String?
+
+  planningRowId String
+  planningRow   PlanningRow @relation(fields: [planningRowId], references: [id], onDelete: Cascade)
+
+  facultyId String
+  faculty   User   @relation(fields: [facultyId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([planningRowId, facultyId, assignType])
+  @@index([planningRowId])
+  @@index([facultyId])
+}
+
+model Group {
+  id           String @id @default(cuid())
+  name         String // FM1, FIT1, FAR1, etc.
+  studentCount Int    @default(0)
+  groupType    String @default("TUTORIAL") // LECTURE, TUTORIAL, LAB
+
+  planningRowId String
+  planningRow   PlanningRow @relation(fields: [planningRowId], references: [id])
+
+  programId String
+  program   Program @relation(fields: [programId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workloadRecords WorkloadRecord[]
+
+  @@index([planningRowId])
+  @@index([programId])
+}
+
+// ─── Workload Records ─────────────────────────────────────────────────────────
+
+model WorkloadRecord {
+  id                                     String                @id @default(cuid())
+  totalHours                             Float
+  status                                 WorkloadStatus        @default(DRAFT)
+  approvalStatus                         WorkloadApprovalStatus @default(PENDING)
+  rejectionReason                        String?
+  notes                                  String?
+  isOverloaded                           Boolean               @default(false)
+  isUnderloaded                          Boolean               @default(false)
+  facultyId                              String
+  courseId                               String
+  semesterId                             String
+  lectureHours                           Float                 @default(0)
+  seminarHours                           Float                 @default(0)
+  labHours                               Float                 @default(0)
+  advisingHours                          Float                 @default(0)
+  researchHours                          Float                 @default(0)
+  adminHours                             Float                 @default(0)
+  otherHours                             Float                 @default(0)
+  assignedById                           String?
+  assignedAt                             DateTime              @default(now())
+  createdAt                              DateTime              @default(now())
+  updatedAt                              DateTime              @updatedAt
+  groupId                                String?
+  hoursPerWeek                           Float                 @default(0)
+  planningRowId                          String?
+  studentCount                           Int?
+  teachingLanguage                       TeachingLanguage?
+  weekCount                              Int                   @default(16)
+  groupCodes                             String[]              @default([])
+  confirmedByResDept                     Boolean               @default(false)
+  courseECTS                             Float?
+  courseType                             String?
+  groupNumbers                           String?
+  lectureGroup                           Int?
+  program                                String?
+  responsibleDepartment                  String?
+  semesterECTS                           Float?
+  semesterNumbers                        Int[]
+  totalCoveredLectureHours               Float                 @default(0)
+  totalCoveredTutorialHours              Float                 @default(0)
+  totalCoveredLabHours                   Float                 @default(0)
+  assignedLectureHours                   Float                 @default(0)
+  assignedTutorialHours                  Float                 @default(0)
+  assignedLabHours                       Float                 @default(0)
+  totalNumberOfGroups                    Int?
+  tutorialGroup                          Int?
+  yearOfStudy                            Int[]
+  lecturesAndTutorialsNo                 Int                   @default(0)
+  uncoveredHours                         Float                 @default(0)
+  totalSmallGroup                        Int                   @default(0)
+  school                                 String?
+  requests                               Request[]
+  WorkloadEditHistory                    WorkloadEditHistory[]
+  assignedBy                             User?                 @relation("WorkloadAssignedBy", fields: [assignedById], references: [id])
+  course                                 Course                @relation(fields: [courseId], references: [id])
+  faculty                                User                  @relation(fields: [facultyId], references: [id])
+  group                                  Group?                @relation(fields: [groupId], references: [id])
+  planningRow                            PlanningRow?          @relation(fields: [planningRowId], references: [id])
+  semester                               Semester              @relation(fields: [semesterId], references: [id])
+
+  @@unique([facultyId, courseId, semesterId])
+  @@index([facultyId, semesterId])
+  @@index([status])
+  @@index([courseId, semesterId])
+  @@index([groupId])
+  @@index([planningRowId])
+}
+
+model WorkloadEditHistory {
+  id               String         @id @default(cuid())
+  workloadRecordId String
+  editedById       String
+  editedByRole     String
+  editedAt         DateTime       @default(now())
+  editedBy         User           @relation(fields: [editedById], references: [id])
+  WorkloadRecord   WorkloadRecord @relation(fields: [workloadRecordId], references: [id], onDelete: Cascade)
+
+  @@index([editedById])
+  @@index([workloadRecordId])
+}
+
+// ─── Vacancy Forecasting ──────────────────────────────────────────────────────
+
+model VacancyRecord {
+  id             String @id @default(cuid())
+  totalRequired  Float
+  totalCovered   Float
+  uncoveredHours Float
+  staffNeeded    Float
+  avgLoadUsed    Float  @default(480)
+
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  semesterId String
+  semester   Semester @relation(fields: [semesterId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([departmentId, semesterId])
+  @@index([semesterId])
+  @@index([departmentId])
+}
+
+// ─── Staff Units (Shtat Birligi) ──────────────────────────────────────────────
+
+model StaffUnit {
+  id                   String @id @default(cuid())
+  totalLectureHours    Float  @default(0)
+  totalTutorialHours   Float  @default(0)
+  totalLabHours        Float  @default(0)
+  totalSeminarHours    Float  @default(0)
+  // Extra load components (Kafedra Yuklama formula)
+  ratingHours          Float  @default(0)   // 0.2 × auditoriya
+  consultHours         Float  @default(0)   // 0.005 × auditoriya
+  courseWorkHours      Float  @default(0)
+  practiceHours        Float  @default(0)
+  thesisHours          Float  @default(0)
+  totalAuditoriyaHours Float  @default(0)   // lec+tut+lab+seminar
+  totalAllHours        Float  @default(0)   // with all extras
+  staffUnitsCount      Float  @default(0)
+  avgLoad              Float  @default(0)
+  // Position counts
+  professorCount       Int    @default(0)
+  docentCount          Int    @default(0)
+  seniorLecturerCount  Int    @default(0)
+  lecturerCount        Int    @default(0)
+
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  semesterId String
+  semester   Semester @relation(fields: [semesterId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([departmentId, semesterId])
+  @@index([departmentId])
+  @@index([semesterId])
+}
+
+// ─── CQI Report ───────────────────────────────────────────────────────────────
+
+model CQIReport {
+  id           String    @id @default(cuid())
+  studentCount Int       @default(0)
+  status       CQIStatus @default(DRAFT)
+
+  // Evaluation breakdown
+  evalMidterm    Float @default(40)
+  evalFinal      Float @default(40)
+  evalAssignment Float @default(20)
+
+  // Textbooks (stored as JSON array)
+  textbooks Json @default("[]")
+
+  // Section E — Instructor evaluation (4 Q&A pairs)
+  evalQ1Answer String?
+  evalQ2Answer String?
+  evalQ3Answer String?
+  evalQ4Answer String?
+
+  // Section F — Student survey
+  surveyParticipation  Int?
+  surveyFollowsSyllabus Float?
+  surveySatisfaction    Float?
+  surveyAvgScore        Float?
+
+  reviewNotes String?
+  submittedAt DateTime?
+  approvedAt  DateTime?
+
+  courseId   String
+  course     Course   @relation(fields: [courseId], references: [id])
+  semesterId String
+  semester   Semester @relation(fields: [semesterId], references: [id])
+  facultyId  String
+  faculty    User     @relation(fields: [facultyId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  syllabus       WeeklySyllabus[]
+  cloAssessments CLOAssessment[]
+
+  @@unique([courseId, semesterId, facultyId])
+  @@index([courseId, semesterId])
+  @@index([facultyId])
+  @@index([status])
+}
+
+model WeeklySyllabus {
+  id        String  @id @default(cuid())
+  week      Int
+  date      String?
+  topic     String
+  tutorials String?
+
+  cqiId     String
+  cqiReport CQIReport @relation(fields: [cqiId], references: [id], onDelete: Cascade)
+
+  @@unique([cqiId, week])
+  @@index([cqiId])
+}
+
+model CLOAssessment {
+  id              String   @id @default(cuid())
+  cloNumber       Int
+  description     String
+  teachingMethods String[] // ["Lectures", "Tutorials"]
+  assessmentTools String[] // ["Exams", "Assignments"]
+  perfHigh        String?
+  perfMedium      String?
+  perfLow         String?
+  plosHigh        String[] // ["PLO1","PLO2"]
+  plosMedium      String[]
+  plosLow         String[]
+
+  cqiId     String
+  cqiReport CQIReport @relation(fields: [cqiId], references: [id], onDelete: Cascade)
+
+  @@unique([cqiId, cloNumber])
+  @@index([cqiId])
+}
+
+model CourseObjective {
+  id          String @id @default(cuid())
+  number      Int
+  description String
+
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, number])
+  @@index([courseId])
+}
+
+// ─── Requests ─────────────────────────────────────────────────────────────────
+
+model Request {
+  id            String        @id @default(cuid())
+  type          RequestType
+  status        RequestStatus @default(PENDING)
+  subject       String
+  description   String
+  attachmentUrl String?
+  reviewNotes   String?
+  resolvedAt    DateTime?
+
+  submittedById String
+  submittedBy   User   @relation("RequestSubmitter", fields: [submittedById], references: [id])
+
+  reviewedById String?
+  reviewedBy   User?   @relation("RequestReviewer", fields: [reviewedById], references: [id])
+
+  workloadId String?
+  workload   WorkloadRecord? @relation(fields: [workloadId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([submittedById])
+  @@index([status])
+  @@index([type])
+}
+
+model Notification {
+  id       String           @id @default(cuid())
+  type     NotificationType
+  title    String
+  message  String
+  isRead   Boolean          @default(false)
+  readAt   DateTime?
+  metadata Json?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+}
+
+model Report {
+  id            String   @id @default(cuid())
+  title         String
+  type          String
+  format        String
+  fileUrl       String?
+  parameters    Json
+  generatedById String
+  generatedBy   User     @relation(fields: [generatedById], references: [id])
+
+  semesterId String?
+  semester   Semester? @relation(fields: [semesterId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([generatedById])
+  @@index([semesterId])
+}
+
+model AuditLog {
+  id         String  @id @default(cuid())
+  action     String
+  entityType String
+  entityId   String
+  oldValues  Json?
+  newValues  Json?
+  ipAddress  String?
+
+  performedById String
+  performedBy   User   @relation(fields: [performedById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([performedById])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}

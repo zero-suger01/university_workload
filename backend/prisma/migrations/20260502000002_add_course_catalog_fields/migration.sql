@@ -1,0 +1,20 @@
+-- Add missing course catalog fields to Course table
+ALTER TABLE "Course"
+  ADD COLUMN IF NOT EXISTS "learningOutcome8" TEXT,
+  ADD COLUMN IF NOT EXISTS "learningOutcome9" TEXT,
+  ADD COLUMN IF NOT EXISTS "learningOutcome10" TEXT,
+  ADD COLUMN IF NOT EXISTS "learningOutcome11" TEXT,
+  ADD COLUMN IF NOT EXISTS "learningOutcome12" TEXT,
+  ADD COLUMN IF NOT EXISTS "learningOutcome13" TEXT,
+  ADD COLUMN IF NOT EXISTS "learningOutcome14" TEXT,
+  ADD COLUMN IF NOT EXISTS "accreditationArea" TEXT,
+  ADD COLUMN IF NOT EXISTS "partOfTerm" TEXT,
+  ADD COLUMN IF NOT EXISTS "format" TEXT,
+  ADD COLUMN IF NOT EXISTS "gradeStatus" TEXT,
+  ADD COLUMN IF NOT EXISTS "seatsAvailable" INTEGER,
+  ADD COLUMN IF NOT EXISTS "waitlistTotal" INTEGER,
+  ADD COLUMN IF NOT EXISTS "lastDayToRegister" TEXT,
+  ADD COLUMN IF NOT EXISTS "lastDayToAddDrop" TEXT,
+  ADD COLUMN IF NOT EXISTS "instructorInfo" TEXT,
+  ADD COLUMN IF NOT EXISTS "meetingInfo" TEXT,
+  ADD COLUMN IF NOT EXISTS "notes" TEXT;
