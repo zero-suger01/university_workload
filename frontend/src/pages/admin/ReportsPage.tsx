@@ -95,7 +95,12 @@ export default function ReportsPage() {
     mutationFn: (data: Record<string, unknown>) => api.post('/reports/generate', data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['reports'] });
-      toast.success(t('reportGenerated'));
+      const now = new Date().toLocaleString('en-GB', {
+        timeZone: 'Asia/Tashkent',
+        day: '2-digit', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      });
+      toast.success(`Report generated at ${now}`);
     },
     onError: (err: any) => toast.error(err?.response?.data?.message || t('failedToGenerate')),
   });
@@ -240,7 +245,16 @@ export default function ReportsPage() {
                     )}
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">{r.title}</p>
-                      <p className="text-xs text-gray-400">{new Date(r.createdAt).toLocaleDateString()} · XLSX</p>
+                      <p className="text-xs text-gray-400">
+                        {new Date(r.createdAt).toLocaleString('en-GB', {
+                          timeZone: 'Asia/Tashkent',
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })} · XLSX
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-1">

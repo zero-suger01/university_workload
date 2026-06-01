@@ -279,15 +279,16 @@ export async function generate(data: GenerateReportInput, generatedById: string)
         lastName: true,
         email: true,
         tempPassword: true,
+        facultyDepartment: true,
         department: { select: { name: true } },
       },
-      orderBy: [{ department: { name: 'asc' } }, { lastName: 'asc' }],
+      orderBy: [{ lastName: 'asc' }],
     });
 
     const rows = users.map((u) => ({
       name: `${u.firstName} ${u.lastName}`,
       email: u.email,
-      department: u.department.name,
+      department: u.facultyDepartment || u.department?.name || '—',
       tempPassword: u.tempPassword ?? 'N/A (Password Changed)',
     }));
 
