@@ -407,7 +407,7 @@ export default function AddCourseModal({ onClose }: AddCourseModalProps) {
           {/* Row 2 */}
           <div>
             <label className={labelCls}>Responsible Department *</label>
-            <CustomDropdown value={watch('departmentId') || ''} options={[...(departments ?? [])].sort((a: any, b: any) => a.name.localeCompare(b.name)).map((d: any) => ({ value: d.id, label: d.name }))} onChange={(val) => setValue('departmentId', val, { shouldValidate: true })} className={inputCls} disabled={loadingDepts} />
+            <CustomDropdown value={watch('departmentId') || ''} options={[...(departments ?? [])].sort((a: any, b: any) => a.name.localeCompare(b.name)).map((d: any) => ({ value: d.id, label: d.name.startsWith('Department of') ? d.name : `Department of ${d.name}` }))} onChange={(val) => setValue('departmentId', val, { shouldValidate: true })} className={inputCls} disabled={loadingDepts} />
             {errors.departmentId && <p className={errorCls}>{errors.departmentId.message}</p>}
           </div>
           <div>

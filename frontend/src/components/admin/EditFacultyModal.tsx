@@ -5,7 +5,14 @@ import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import { Loader2 } from 'lucide-react';
+import { Loader2, RefreshCw, Copy } from 'lucide-react';
+
+function generatePassword(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  const arr = new Uint8Array(10);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map((b) => chars[b % chars.length]).join('');
+}
 import api from '../../api/client';
 import BaseModal from '../shared/BaseModal';
 import { CustomDropdown } from '../../components/shared/CustomDropdown';
@@ -34,17 +41,18 @@ const ACADEMIC_POSITIONS = [
 ] as const;
 
 const DEPARTMENTS = [
-  'General Education',
-  'English',
-  'Mathematics',
-  'Computer Science',
-  'Education',
-  'Pre-primary education',
-  'Primary education',
-  'Chemistry',
-  'Biology',
-  'Physics',
-  'Geography',
+  'Department of General Education',
+  'Department of English',
+  'Department of Mathematics',
+  'Department of Computer Science',
+  'Department of Education',
+  'Department of Pre-primary Education',
+  'Department of Primary Education',
+  'Department of Chemistry',
+  'Department of Biology',
+  'Department of Physics',
+  'Department of Geography',
+  'Department of Information Systems and Technologies',
 ] as const;
 
 const schema = z.object({
@@ -52,7 +60,7 @@ const schema = z.object({
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
   email: z.string().email('Invalid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters').optional().or(z.literal('')),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
   departmentId: z.string().optional(),
   facultyDepartment: z.string().min(1, 'Department is required'),
   role: z.enum(['ADMIN', 'DEPARTMENT_HEAD', 'FACULTY']),
@@ -117,6 +125,7 @@ export default function EditFacultyModal({ faculty, onClose }: EditFacultyModalP
       firstName: faculty.firstName,
       lastName: faculty.lastName,
       email: faculty.email,
+      password: generatePassword(),
       departmentId: faculty.department?.id,
       facultyDepartment: (faculty as any).facultyDepartment || faculty.department?.name || '',
       role: faculty.role as any,
@@ -130,6 +139,12 @@ export default function EditFacultyModal({ faculty, onClose }: EditFacultyModalP
   });
 
   const facultyDeptValue = watch('facultyDepartment') || '';
+  const currentPassword = watch('password');
+
+  function regenerate() { setValue('password', generatePassword()); }
+  function copyPassword() {
+    navigator.clipboard.writeText(currentPassword).then(() => toast.success('Password copied to clipboard'));
+  }
 
   const [customDepts, setCustomDepts] = useState<string[]>(() => {
     const current = (faculty as any).facultyDepartment || '';
@@ -144,7 +159,6 @@ export default function EditFacultyModal({ faculty, onClose }: EditFacultyModalP
   const mutation = useMutation({
     mutationFn: (data: FormData) => {
       const payload: Record<string, unknown> = { ...data };
-      if (!payload.password) delete payload.password;
       if (!payload.departmentId) delete payload.departmentId;
       if (!payload.gender) delete payload.gender;
       if (!payload.academicPosition) delete payload.academicPosition;
@@ -254,15 +268,35 @@ export default function EditFacultyModal({ faculty, onClose }: EditFacultyModalP
           <SectionHeader title="Account" />
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">
-              Password <span className="text-[10px] font-normal text-gray-400">(leave blank to keep current)</span>
+              Temporary Password
+              <span className="ml-1 text-[10px] font-normal text-primary-600">(auto-generated · sent by email)</span>
             </label>
-            <input
-              {...register('password')}
-              type="password"
-              className="input"
-              placeholder="••••••••"
-            />
+            <div className="flex gap-2">
+              <input
+                {...register('password')}
+                type="text"
+                className="input font-mono tracking-widest flex-1"
+                readOnly
+              />
+              <button
+                type="button"
+                onClick={regenerate}
+                title="Generate new password"
+                className="px-3 py-2 border border-gray-200 rounded-lg text-gray-500 hover:text-primary-600 hover:border-primary-300 hover:bg-primary-50 transition-colors flex-shrink-0"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={copyPassword}
+                title="Copy password"
+                className="px-3 py-2 border border-gray-200 rounded-lg text-gray-500 hover:text-primary-600 hover:border-primary-300 hover:bg-primary-50 transition-colors flex-shrink-0"
+              >
+                <Copy className="w-4 h-4" />
+              </button>
+            </div>
             {errors.password && <p className="text-xs text-red-500 mt-1">{errors.password.message}</p>}
+            <p className="text-xs text-gray-400 mt-1">This password will be emailed to the faculty member upon saving.</p>
           </div>
         </div>
 

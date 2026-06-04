@@ -8,7 +8,7 @@ enum TeachingLanguage {
 }
 
 export const cohortSchema = z.object({
-  programId: z.string().min(1),
+  programId: z.string().optional(),
   semesterId: z.string().min(1),
   yearOfStudy: z.number().int().min(1).max(6),
   language: z.nativeEnum(TeachingLanguage),

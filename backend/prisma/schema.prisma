@@ -171,7 +171,7 @@ model User {
   minWeeklyHours Int              @default(12)
 
   academicPosition AcademicPosition?
-  employmentType   EmploymentType    @default(FULL_TIME)
+  employmentType   EmploymentType?
   academicDegree   String?
   adminPosition    String?
   gender           Gender?
@@ -403,15 +403,15 @@ model StudentCohort {
   groupCodes   String[]         // ["FM1","FM2","FM3"]
   notes        String?
 
-  programId  String
-  program    Program  @relation(fields: [programId], references: [id])
+  programId  String?
+  program    Program?  @relation(fields: [programId], references: [id])
   semesterId String
   semester   Semester @relation(fields: [semesterId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([programId, semesterId])
+  @@index([semesterId])
 }
 
 // ─── Semester Planning ────────────────────────────────────────────────────────

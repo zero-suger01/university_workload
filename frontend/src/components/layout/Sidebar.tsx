@@ -35,7 +35,7 @@ export default function Sidebar({ isOpen, onClose }: Props) {
   const user = useAuthStore((s) => s.user);
   const location = useLocation();
 
-  const facultyPaths = ['/admin/faculty', '/admin/cqi-review', '/admin/fpi'];
+  const facultyPaths = ['/admin/faculty'];
   const workloadPaths = [
     '/admin/workloads', '/admin/student-cohorts', '/admin/rooms', '/admin/requests',
   ];
@@ -186,12 +186,6 @@ export default function Sidebar({ isOpen, onClose }: Props) {
               <div className="ml-4 mt-0.5 space-y-0.5 border-l border-gray-200 pl-3">
                 <NavLink to="/admin/faculty" onClick={onClose} className={({ isActive }) => subLinkClass(isActive)}>
                   <Users className="w-3.5 h-3.5 flex-shrink-0" /> Academic Staff
-                </NavLink>
-                <NavLink to="/admin/cqi-review" onClick={onClose} className={({ isActive }) => subLinkClass(isActive)}>
-                  <ClipboardCheck className="w-3.5 h-3.5 flex-shrink-0" /> CQI Review
-                </NavLink>
-                <NavLink to="/admin/fpi" onClick={onClose} className={({ isActive }) => subLinkClass(isActive)}>
-                  <FileText className="w-3.5 h-3.5 flex-shrink-0" /> FPI
                 </NavLink>
               </div>
             )}

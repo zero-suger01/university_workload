@@ -28,7 +28,11 @@ export async function getByProgram(programId: string, semesterId?: string) {
 }
 
 export async function create(data: CohortInput) {
-  return prisma.studentCohort.create({ data, include });
+  const { programId, ...rest } = data;
+  return prisma.studentCohort.create({
+    data: programId ? { ...rest, programId } : rest,
+    include,
+  });
 }
 
 export async function update(id: string, data: Partial<CohortInput>) {

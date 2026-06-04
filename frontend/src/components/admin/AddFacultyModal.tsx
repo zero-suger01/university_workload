@@ -34,17 +34,18 @@ const ACADEMIC_POSITIONS = [
 ] as const;
 
 const DEPARTMENTS = [
-  'General Education',
-  'English',
-  'Mathematics',
-  'Computer Science',
-  'Education',
-  'Pre-primary education',
-  'Primary education',
-  'Chemistry',
-  'Biology',
-  'Physics',
-  'Geography',
+  'Department of General Education',
+  'Department of English',
+  'Department of Mathematics',
+  'Department of Computer Science',
+  'Department of Education',
+  'Department of Pre-primary Education',
+  'Department of Primary Education',
+  'Department of Chemistry',
+  'Department of Biology',
+  'Department of Physics',
+  'Department of Geography',
+  'Department of Information Systems and Technologies',
 ] as const;
 
 const schema = z.object({
@@ -200,7 +201,7 @@ export default function AddFacultyModal({ onClose }: AddFacultyModalProps) {
               <label className="block text-xs font-medium text-gray-500 mb-1">Employment Type</label>
               <CustomDropdown
                 value={watch('employmentType') || ''}
-                options={[{ value: 'FULL_TIME', label: 'Full Time' }, { value: 'PART_TIME', label: 'Part Time' }]}
+                options={[{ value: 'FULL_TIME', label: 'Full Time' }, { value: 'PART_TIME', label: 'Part Time' }, { value: '', label: 'Not decided yet' }]}
                 onChange={(val) => setValue('employmentType', val as any, { shouldValidate: true })}
                 placeholder="Select Employment Type"
                 className="input"

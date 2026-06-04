@@ -238,7 +238,7 @@ export default function WorkloadAssignment() {
   // Edit mode state — when set, the left panel is in edit mode
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBanner, setEditBanner] = useState('');
-  const [activeTab, setActiveTab] = useState<'create' | 'assign' | 'view' | 'recent'>('assign');
+  const [activeTab, setActiveTab] = useState<'create' | 'assign' | 'view' | 'recent'>('view');
   // showCreateForm removed — form now lives in Create/Assign tabs
 
   const [_facultySearch, setFacultySearch] = useState('');
@@ -276,8 +276,10 @@ export default function WorkloadAssignment() {
   const col = (key: string) => !hiddenCols.has(key);
   const [matrixView] = useState(true);
   const [matrixHiddenCols, setMatrixHiddenCols] = useState<Set<number>>(new Set());
+  const [hiddenDepts, setHiddenDepts] = useState<Set<string>>(new Set());
   const [showProfCols, setShowProfCols] = useState(true);
   const toggleMatrixCol = (i: number) => setMatrixHiddenCols(prev => { const s = new Set(prev); s.has(i) ? s.delete(i) : s.add(i); return s; });
+  const toggleDept = (name: string) => setHiddenDepts(prev => { const s = new Set(prev); s.has(name) ? s.delete(name) : s.add(name); return s; });
   const COL_LABELS: Record<string, string> = {
     lang: 'Language', yearOfStudy: 'Year of Study', semester: 'Semester', program: 'Program',
     courseCode: 'Course Code', courseTitle: 'Course Title', courseType: 'Course Type',
@@ -425,24 +427,42 @@ export default function WorkloadAssignment() {
       const candidates = fromWorkloads.size > 0 ? fromWorkloads : fromForm ? new Set([fromForm]) : null;
 
       if (isHead && headFacultyDepartment) {
-        // Head can ONLY see professors from their own department
         allowedDepts = new Set([headFacultyDepartment.toLowerCase().trim()]);
       } else if (candidates) {
-        // Match against facultyDepartment (the Responsible Department field on each user)
-        const hasMatch = (users as any[] || []).some((u: any) =>
-          candidates.has((u.facultyDepartment || '').toLowerCase().trim())
-        );
-        if (hasMatch) allowedDepts = candidates;
-        // If no match → show all
+        allowedDepts = candidates;
+      } else {
+        allowedDepts = new Set();
       }
+    } else if (activeTab === 'view') {
+      // In view tab: only show professors from departments that appear in visible workloads
+      const fromWorkloads = new Set(
+        (viewFilteredWorkloads as any[])
+          .map((w: any) => (w.responsibleDepartment || '').toLowerCase().trim())
+          .filter(Boolean)
+      );
+      if (isHead && headFacultyDepartment) {
+        allowedDepts = new Set([headFacultyDepartment.toLowerCase().trim()]);
+      } else if (fromWorkloads.size > 0) {
+        allowedDepts = fromWorkloads;
+      }
+      // else allowedDepts stays null → show all (no workloads yet)
     }
+
+    // Normalize "X Department" ↔ "Department of X" so slight name variations still match
+    function normalizeDept(name: string): string {
+      const s = name.toLowerCase().trim();
+      if (s.startsWith('department of ')) return s;
+      if (s.endsWith(' department')) return 'department of ' + s.slice(0, s.length - ' department'.length).trim();
+      return s;
+    }
+    const normalizedAllowed = allowedDepts ? new Set(Array.from(allowedDepts).map(normalizeDept)) : null;
 
     // Build department → professor structure grouped by facultyDepartment
     const deptMap = new Map<string, { deptName: string; profs: { id: string; firstName: string; lastName: string }[] }>();
     for (const u of (users as any[] || [])) {
       // Use facultyDepartment as the grouping key (Responsible Department)
       const deptName = (u as any).facultyDepartment || u.department?.name || 'Other';
-      if (allowedDepts && !allowedDepts.has(deptName.toLowerCase().trim())) continue;
+      if (normalizedAllowed && !normalizedAllowed.has(normalizeDept(deptName))) continue;
       if (!deptMap.has(deptName)) deptMap.set(deptName, { deptName, profs: [] });
       deptMap.get(deptName)!.profs.push({ id: u.id, firstName: u.firstName, lastName: u.lastName });
     }
@@ -574,9 +594,16 @@ export default function WorkloadAssignment() {
 
   // Auto-select semesterId from the first available semester when loaded
   useEffect(() => {
-    if (semesters?.length && !watch('semesterId')) {
-      setValue('semesterId', semesters[0].id, { shouldValidate: false });
-      setConflictSemesterId(semesters[0].id);
+    if (semesters?.length) {
+      const current = semesters.find((s: any) => s.isCurrent) ?? semesters[0];
+      if (!watch('semesterId')) {
+        setValue('semesterId', current.id, { shouldValidate: false });
+        setConflictSemesterId(current.id);
+      }
+      // Auto-apply semester filter in View tab so table only shows one semester
+      if (!viewFilterSemesterId) {
+        setViewFilterSemesterId(current.id);
+      }
     }
   }, [semesters]);
 
@@ -699,6 +726,7 @@ export default function WorkloadAssignment() {
       workloadsApi.create({ ...data, groupCodes: selectedGroupCodes, program: data.program.join(', ') }),
     onSuccess: (_res, variables) => {
       qc.invalidateQueries({ queryKey: ['workloads-all'] });
+      qc.invalidateQueries({ queryKey: ['faculty-workloads'] });
       const dept = variables.responsibleDepartment || '';
       setFormResponsibleDept(dept);
       setShowProfCols(true);
@@ -718,6 +746,7 @@ export default function WorkloadAssignment() {
       workloadsApi.update(editingId!, { ...data, groupCodes: selectedGroupCodes, program: data.program.join(', ') }),
     onSuccess: (_res, variables) => {
       qc.invalidateQueries({ queryKey: ['workloads-all'] });
+      qc.invalidateQueries({ queryKey: ['faculty-workloads'] });
       const dept = variables.responsibleDepartment || '';
       setFormResponsibleDept(dept);
       setShowProfCols(true);
@@ -1042,7 +1071,7 @@ export default function WorkloadAssignment() {
       if (editingId === id) resetForm();
       return workloadsApi.delete(id);
     }))
-      .then(() => { qc.invalidateQueries({ queryKey: ['workloads-all'] }); toast.success(`${count} assignments deleted`); cancelSelectMode(); })
+      .then(() => { qc.invalidateQueries({ queryKey: ['workloads-all'] }); qc.invalidateQueries({ queryKey: ['faculty-workloads'] }); toast.success(`${count} assignments deleted`); cancelSelectMode(); })
       .catch((err: any) => toast.error(err?.response?.data?.message || 'Failed to delete'))
       .finally(() => setBulkPending(false));
   }
@@ -1392,7 +1421,7 @@ export default function WorkloadAssignment() {
       {(activeTab === 'view' || activeTab === 'assign') && (
         <div className="space-y-4">
           {/* Filters Toolbar */}
-          {activeTab === 'view' && <div className="card p-4">
+          {(activeTab === 'view' || activeTab === 'assign') && <div className="card p-4">
             <div className="flex flex-col lg:flex-row lg:items-end gap-3">
               <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                 <div>
@@ -1479,20 +1508,6 @@ export default function WorkloadAssignment() {
                     Clear filters
                   </button>
                 )}
-                <button
-                  onClick={downloadExcel}
-                  className="px-3 py-2 text-sm font-medium text-primary-700 bg-primary-50 border border-primary-200 hover:bg-primary-100 rounded-lg flex items-center gap-1.5 transition-colors whitespace-nowrap"
-                >
-                  <Download className="w-3.5 h-3.5 text-primary-600" />
-                  Excel
-                </button>
-                <button
-                  onClick={() => setActiveTab('create')}
-                  className="px-3 py-2 text-sm font-medium rounded-lg flex items-center gap-1.5 transition-colors whitespace-nowrap bg-primary-600 text-white hover:bg-primary-700 border border-primary-600"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Create Workload
-                </button>
               </div>
             </div>
           </div>}
@@ -1548,27 +1563,33 @@ export default function WorkloadAssignment() {
               'Lecture hours','Tutorial hours','Lab hours','Total covered hrs/week','Uncovered hours','Lectures and tutorials nº'
             ]; // 23 columns total (Groups-Joint Groups merged)
             const profColsVisible = showProfCols || activeTab === 'view' || activeTab === 'assign';
-            const totalProfCols = profColsVisible ? matrixData.depts.reduce((s, d) => s + d.profs.length * 3, 0) : 0;
+            const totalProfCols = profColsVisible ? matrixData.depts.reduce((s, d) => hiddenDepts.has(d.deptName) ? s : s + d.profs.length * 3, 0) : 0;
             const visibleBaseCount = BASE_COLS.filter((_, i) => !matrixHiddenCols.has(i)).length;
             const baseStyle: React.CSSProperties = { border: '1px solid #B0C4D8', padding: '4px 6px', textAlign: 'center', whiteSpace: 'nowrap', fontSize: 11, verticalAlign: 'middle' };
             const thBase: React.CSSProperties = { ...baseStyle, background: HEADER_BG, fontWeight: 700 };
             return (<>
-            {matrixHiddenCols.size > 0 && (
-              <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs mb-2">
-                <span className="text-gray-500 font-medium shrink-0">Hidden:</span>
+            {(matrixHiddenCols.size > 0 || hiddenDepts.size > 0) && (
+              <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs mb-2">
+                <span className="text-amber-700 font-medium shrink-0">Hidden:</span>
                 {[...matrixHiddenCols].sort((a,b)=>a-b).map(i => (
-                  <button key={i} onClick={() => toggleMatrixCol(i)}
-                    className="px-2 py-0.5 bg-white border border-gray-300 text-gray-600 rounded hover:bg-gray-100 transition-colors text-[11px]">
+                  <button key={`col-${i}`} onClick={() => toggleMatrixCol(i)}
+                    className="px-2 py-0.5 bg-white border border-amber-300 text-amber-700 rounded hover:bg-amber-100 transition-colors">
                     + {BASE_COLS[i]}
                   </button>
                 ))}
-                <button onClick={() => setMatrixHiddenCols(new Set())} className="ml-auto text-primary-500 hover:text-primary-700 underline">Show all</button>
+                {[...hiddenDepts].map(name => (
+                  <button key={`dept-${name}`} onClick={() => toggleDept(name)}
+                    className="px-2 py-0.5 bg-white border border-amber-300 text-amber-700 rounded hover:bg-amber-100 transition-colors">
+                    + {name}
+                  </button>
+                ))}
+                <button onClick={() => { setMatrixHiddenCols(new Set()); setHiddenDepts(new Set()); }} className="ml-auto text-amber-500 hover:text-amber-700 underline">Show all</button>
               </div>
             )}
             <div className="rounded-xl border border-gray-200 overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
                 <table style={{ borderCollapse: 'collapse', fontSize: 11, minWidth: 'max-content' }}>
-                  <thead>
+                  <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                     {/* Row 1 — checkbox + planning spacer + department headers + Status/Actions */}
                     <tr>
                       {activeTab === 'assign' && showCheckboxes && <th rowSpan={3} style={{ ...thBase, width: 28, minWidth: 28, padding: '4px' }}>
@@ -1587,12 +1608,19 @@ export default function WorkloadAssignment() {
                           {activeTab === 'assign' ? 'Assign Workload' : 'Final Workload'}
                         </th>
                       )}
-                      {profColsVisible && matrixData.depts.map((d) => (
-                        <th key={d.deptName} colSpan={d.profs.length * 3}
-                          style={{ border: '1px solid #CBD5E1', padding: '6px 8px', fontWeight: 700, fontSize: 10, textAlign: 'center', whiteSpace: 'nowrap', letterSpacing: 0.5, color: '#1E293B', background: HEADER_BG }}>
-                          {d.deptName}
-                        </th>
-                      ))}
+                      {profColsVisible && matrixData.depts.map((d) => {
+                        if (hiddenDepts.has(d.deptName)) return null;
+                        return (
+                          <th key={d.deptName} colSpan={d.profs.length * 3}
+                            title="Click to hide professors"
+                            onClick={() => toggleDept(d.deptName)}
+                            style={{ border: '1px solid #CBD5E1', padding: '6px 8px', fontWeight: 700, fontSize: 10, textAlign: 'center', whiteSpace: 'nowrap', letterSpacing: 0.5, color: '#1E293B', background: HEADER_BG, cursor: 'pointer', userSelect: 'none' }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#FEF2F2'; (e.currentTarget as HTMLElement).style.color = '#DC2626'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = HEADER_BG; (e.currentTarget as HTMLElement).style.color = '#1E293B'; }}>
+                            {d.deptName} ▾
+                          </th>
+                        );
+                      })}
                       <th rowSpan={3} style={{ ...thBase, fontSize: 9, fontWeight: 700, color: '#334155', padding: '4px 6px', minWidth: 70, verticalAlign: 'middle' }}>Status</th>
                       {activeTab === 'assign' && <th rowSpan={3} style={{ ...thBase, fontSize: 9, fontWeight: 700, color: '#334155', padding: '4px 6px', minWidth: 50, verticalAlign: 'middle' }}>Actions</th>}
                     </tr>
@@ -1609,6 +1637,7 @@ export default function WorkloadAssignment() {
                         </th>
                       ))}
                       {profColsVisible && matrixData.depts.flatMap((d) => {
+                        if (hiddenDepts.has(d.deptName)) return [];
                         return d.profs.map(p => (
                           <th key={p.id} colSpan={3}
                             style={{ height: 130, width: 52, verticalAlign: 'bottom', padding: '4px 2px', textAlign: 'center', border: '1px solid #CBD5E1', background: HEADER_BG }}>
@@ -1622,6 +1651,7 @@ export default function WorkloadAssignment() {
                     {/* Row 3 — L / T labels (planning cells span via rowSpan) */}
                     <tr>
                       {profColsVisible && matrixData.depts.flatMap((d) => {
+                        if (hiddenDepts.has(d.deptName)) return [];
                         return d.profs.flatMap(p => [
                           <th key={`${p.id}-L`} style={{ border: '1px solid #CBD5E1', padding: '5px 6px', fontWeight: 700, fontSize: 10, textAlign: 'center', background: HEADER_BG, color: '#475569', minWidth: 26 }}>Le</th>,
                           <th key={`${p.id}-T`} style={{ border: '1px solid #CBD5E1', padding: '5px 6px', fontWeight: 700, fontSize: 10, textAlign: 'center', background: HEADER_BG, color: '#475569', minWidth: 26 }}>Tu</th>,
@@ -1701,7 +1731,7 @@ export default function WorkloadAssignment() {
                           {mh(7) && numCell('weekCount', w.weekCount?`${w.weekCount}w`:'', w.weekCount??0)}
                           {mh(8) && fmCell(w.courseECTS??'')}
                           {mh(9) && numCell('semesterECTS', w.semesterECTS??'', w.semesterECTS??0)}
-                          {mh(10) && fmCell(w.responsibleDepartment||'', { maxWidth: 120 })}
+                          {mh(10) && fmCell((w.responsibleDepartment||'').replace(/^Department of\s+/i, ''), { maxWidth: 120 })}
                           {mh(11) && selCell('confirmedByResDept', w.confirmedByResDept?'TRUE':'FALSE', [{v:'false',l:'FALSE'},{v:'true',l:'TRUE'}], v=>({confirmedByResDept:v==='true'}), { color: '#1E293B', fontWeight: 400 })}
                           {mh(12) && numCell('studentCount', w.studentCount??'', w.studentCount??0)}
                           {mh(13) && numCell('lectureGroup', w.lectureGroup??'', w.lectureGroup??0)}
@@ -1726,6 +1756,7 @@ export default function WorkloadAssignment() {
                                 })[0]
                               : null;
                             return matrixData.depts.flatMap((d) => {
+                            if (hiddenDepts.has(d.deptName)) return [];
                             return d.profs.flatMap(p => {
                               const a = assignMap[p.id];
                               const isLatest = p.id === latestProfId;
@@ -1998,7 +2029,7 @@ export default function WorkloadAssignment() {
                         {!isHead && col('courseDuration') && cell('weekCount', w.weekCount ? `${w.weekCount}w` : '-', w.weekCount ?? 0)}
                         {col('courseECTS') && formula(w.courseECTS || '-', 'Auto-filled from Course Title')}
                         {!isHead && col('semesterECTS') && cell('semesterECTS', w.semesterECTS || '-', w.semesterECTS ?? 0)}
-                        {col('resDept') && formula(w.responsibleDepartment || '-', 'Auto-filled from Course Title')}
+                        {col('resDept') && formula((w.responsibleDepartment || '-').replace(/^Department of\s+/i, ''), 'Auto-filled from Course Title')}
                         {!isHead && col('confirmedResDept') && selCell('confirmedByResDept', w.confirmedByResDept ? 'TRUE' : 'FALSE',
                           [{v:'false',l:'FALSE'},{v:'true',l:'TRUE'}],
                           v => ({confirmedByResDept: v==='true'}))}

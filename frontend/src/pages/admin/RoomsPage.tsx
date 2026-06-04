@@ -352,27 +352,12 @@ export default function RoomsPage() {
                           {room.capacity} seats
                         </span>
                       </td>
-                      <td className="px-2 py-2 text-center text-[11px] text-gray-700 whitespace-nowrap border-r border-gray-200">
-                        <button
-                          onClick={() => {
-                            const action = room.isAvailable ? 'unavailable' : 'available';
-                            enterSelectMode(action);
-                            setSelectedIds(new Set([room.id]));
-                          }}
-                          className="inline-flex items-center gap-1.5 text-xs"
-                        >
-                          {room.isAvailable ? (
-                            <>
-                              <ToggleRight className="w-4 h-4 text-green-500" />
-                              <span className="text-green-600">Available</span>
-                            </>
-                          ) : (
-                            <>
-                              <ToggleLeft className="w-4 h-4 text-gray-400" />
-                              <span className="text-gray-400">Busy</span>
-                            </>
-                          )}
-                        </button>
+                      <td className="px-2 py-2 text-center text-[11px] whitespace-nowrap border-r border-gray-200">
+                        {room.isAvailable ? (
+                          <span className="text-green-600 font-medium">Available</span>
+                        ) : (
+                          <span className="text-gray-400">Busy</span>
+                        )}
                       </td>
                       <td className="px-2 py-2 text-center border-r border-gray-200">
                         <div className="flex items-center justify-center gap-1">

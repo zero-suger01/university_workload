@@ -52,7 +52,7 @@ export default function StudentCohortsPage() {
   const programs: { id: string; name: string; code: string }[] = programsData ?? [];
 
   const filtered = cohorts.filter((c) => {
-    if (filterProgram && c.program.id !== filterProgram) return false;
+    if (filterProgram && c.program?.id !== filterProgram) return false;
     return true;
   });
 
@@ -75,9 +75,8 @@ export default function StudentCohortsPage() {
       .finally(() => setBulkPending(false));
   }
 
-  // Group by program for footer totals
   const totalByProgram = filtered.reduce<Record<string, number>>((acc, c) => {
-    const key = c.program.name;
+    const key = c.program?.name ?? 'Unassigned';
     acc[key] = (acc[key] ?? 0) + c.studentCount;
     return acc;
   }, {});
@@ -166,9 +165,9 @@ export default function StudentCohortsPage() {
                       className="rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
                   </th>
                 )}
-                <th className="px-2 py-2.5 text-center font-bold text-gray-500 uppercase text-[9px] whitespace-nowrap border-r border-gray-200">Program</th>
                 <th className="px-2 py-2.5 text-center font-bold text-gray-500 uppercase text-[9px] whitespace-nowrap border-r border-gray-200">Year</th>
                 <th className="px-2 py-2.5 text-center font-bold text-gray-500 uppercase text-[9px] whitespace-nowrap border-r border-gray-200">Language</th>
+                <th className="px-2 py-2.5 text-center font-bold text-gray-500 uppercase text-[9px] whitespace-nowrap border-r border-gray-200">Program</th>
                 <th className="px-2 py-2.5 text-center font-bold text-gray-500 uppercase text-[9px] whitespace-nowrap border-r border-gray-200">Students</th>
                 <th className="px-2 py-2.5 text-center font-bold text-gray-500 uppercase text-[9px] whitespace-nowrap border-r border-gray-200">Group Codes</th>
                 <th className="px-2 py-2.5 text-center font-bold text-gray-500 uppercase text-[9px] whitespace-nowrap border-r border-gray-200">Actions</th>
@@ -186,12 +185,6 @@ export default function StudentCohortsPage() {
                       </td>
                     )}
                     <td className="px-2 py-2 text-center text-[11px] text-gray-700 whitespace-nowrap border-r border-gray-200">
-                      <div>
-                        <p>{cohort.program.name}</p>
-                        <p>{cohort.program.code}</p>
-                      </div>
-                    </td>
-                    <td className="px-2 py-2 text-center text-[11px] text-gray-700 whitespace-nowrap border-r border-gray-200">
                       <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium">
                         Year {cohort.yearOfStudy}
                       </span>
@@ -200,6 +193,9 @@ export default function StudentCohortsPage() {
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${langConfig.color}`}>
                         {langConfig.label}
                       </span>
+                    </td>
+                    <td className="px-2 py-2 text-center text-[11px] text-gray-700 whitespace-nowrap border-r border-gray-200">
+                      {cohort.program?.name ?? '—'}
                     </td>
                     <td className="px-2 py-2 text-center text-[11px] text-gray-700 whitespace-nowrap border-r border-gray-200">
                       {cohort.studentCount}
@@ -285,7 +281,7 @@ function CohortModal({
   onSaved: () => void;
 }) {
   const [form, setForm] = useState({
-    programId: cohort?.program.id ?? '',
+    programId: cohort?.program?.id ?? '',
     semesterId: cohort?.semester.id ?? '',
     yearOfStudy: cohort?.yearOfStudy ?? 1,
     language: cohort?.language ?? 'UZB',
@@ -324,14 +320,15 @@ function CohortModal({
       ? [...form.groupCodes, pendingCode]
       : form.groupCodes;
 
-    mutation.mutate({
-      programId: form.programId,
+    const payload: Record<string, unknown> = {
       semesterId: form.semesterId,
       yearOfStudy: form.yearOfStudy,
       language: form.language,
       studentCount: form.studentCount,
       groupCodes: finalCodes,
-    });
+    };
+    if (form.programId) payload.programId = form.programId;
+    mutation.mutate(payload);
   }
 
   return (
@@ -342,18 +339,6 @@ function CohortModal({
           <button onClick={onClose}><X className="w-5 h-5 text-gray-400" /></button>
         </div>
         <div className="p-6 space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Program *</label>
-            <CustomDropdown
-              value={form.programId}
-              onChange={(v) => setForm((p) => ({ ...p, programId: v }))}
-              options={[
-                { value: '', label: 'Select program...' },
-                ...programs.map((p) => ({ value: p.id, label: `${p.code} — ${p.name}` })),
-              ]}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
-          </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Semester *</label>
             <CustomDropdown
@@ -456,7 +441,7 @@ function CohortModal({
         <div className="flex gap-3 px-6 pb-6">
           <button
             onClick={handleSave}
-            disabled={mutation.isPending || !form.programId || !form.semesterId}
+            disabled={mutation.isPending || !form.semesterId}
             className="flex-1 btn-primary gap-2"
           >
             <Save className="w-4 h-4" />

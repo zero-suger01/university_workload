@@ -431,7 +431,7 @@ export default function CourseCatalogPage({ readOnly = false }: { readOnly?: boo
                   </th>
                 );
                 return (
-              <thead>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                 <tr>
                   {showCheckboxes && (
                     <th style={{ ...thSt, width: 28, height: 28, padding: '4px' }}>
@@ -644,7 +644,7 @@ export default function CourseCatalogPage({ readOnly = false }: { readOnly?: boo
             ) : null;
             return (
             <table style={{ borderCollapse: 'collapse', fontSize: 11, minWidth: 'max-content', width: '100%' }}>
-              <thead>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                 <tr>
                   {vTh2('Subject Board',0)}{vTh2('Course Code',1)}{vTh2('Title',2)}{vTh2('Type',3)}{vTh2('Credits',4)}{vTh2('Max Students',5)}{vTh2('L/T/Lab',6)}{vTh2('Semester',7)}{vTh2('Resp. Dept',8)}{vTh2('ECTS',9)}{vTh2('US Credits',10)}{vTh2('Prerequisites',11)}{vTh2('Degree',12)}{vTh2('Duration',13)}{vTh2('Textbook',14)}{vTh2('Part of Term',15)}{vTh2('Format',16)}{vTh2('Grade Status',17)}{vTh2('Accreditation',18)}{vTh2('Max Enroll',19)}{vTh2('Seats',20)}{vTh2('Waitlist',21)}{vTh2('Last Register',22)}{vTh2('Last Add/Drop',23)}{vTh2('Instructor',24)}{vTh2('Meeting',25)}{vTh2('Notes',26)}
                   <th style={{ ...thSt, height: 'auto', padding: '6px 8px', fontSize: 9, letterSpacing: 0.5, cursor: 'default' }}>Outcomes</th>
@@ -866,7 +866,7 @@ function CourseDetail({
   };
 
   const [form, setForm] = useState<Record<string, unknown>>(() => getDefaultForm(course));
-  const RESPONSIBLE_DEPTS = ['General Education','English','Mathematics','Computer Science','Education','Pre-primary education','Primary education','Chemistry','Biology','Physics','Geography'];
+  const RESPONSIBLE_DEPTS = ['Department of General Education','Department of English','Department of Mathematics','Department of Computer Science','Department of Education','Department of Pre-primary Education','Department of Primary Education','Department of Chemistry','Department of Biology','Department of Physics','Department of Geography','Department of Information Systems and Technologies'];
   const [customDepts, setCustomDepts] = useState<string[]>(() => {
     const current = String((getDefaultForm(course) as Record<string, unknown>).responsibleDepartment ?? '');
     return current !== '' && !RESPONSIBLE_DEPTS.includes(current) ? [current] : [];
