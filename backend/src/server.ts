@@ -2,6 +2,7 @@ import 'dotenv/config';
 import app from './app';
 import { prisma } from './config/database';
 import { resyncAllFlags } from './modules/workloads/workloads.service';
+import { expireEndedSemesters } from './modules/semesters/semesters.service';
 
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
 
@@ -10,6 +11,11 @@ async function main() {
   console.log('✅ Database connected');
 
   await resyncAllFlags();
+
+  await expireEndedSemesters();
+  setInterval(() => {
+    expireEndedSemesters().catch((err) => console.error('Semester expiry check failed:', err));
+  }, 60 * 60 * 1000);
 
   app.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);

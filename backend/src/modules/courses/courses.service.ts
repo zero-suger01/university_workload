@@ -96,15 +96,26 @@ export async function create(data: CourseInput) {
     include: { department: { select: { id: true, name: true, code: true } } },
   });
 
-  // Notify all admins and heads
-  const admins = await prisma.user.findMany({
-    where: { role: { in: ['ADMIN', 'DEPARTMENT_HEAD'] } },
+  // Notify admins + only the head(s) of the course's responsible department
+  const recipients = await prisma.user.findMany({
+    where: {
+      isActive: true,
+      OR: [
+        { role: 'ADMIN' },
+        {
+          role: 'DEPARTMENT_HEAD',
+          ...(course.responsibleDepartment
+            ? { facultyDepartment: course.responsibleDepartment }
+            : { departmentId: course.departmentId }),
+        },
+      ],
+    },
     select: { id: true },
   });
   await Promise.all(
-    admins.map((admin) =>
+    recipients.map((u) =>
       createNotification(
-        admin.id,
+        u.id,
         NotificationType.SYSTEM_ALERT,
         'New Course Added',
         `Course ${course.courseCode} — ${course.title} has been added to the catalog.`,
@@ -128,14 +139,25 @@ export async function update(id: string, data: Partial<CourseInput>) {
     });
   const updated = await prisma.course.update({ where: { id }, data: { ...data, weeklyHours, degreeLevel: normalizeDegreeLevel(data.degreeLevel as string | undefined) } });
 
-  const admins = await prisma.user.findMany({
-    where: { role: { in: ['ADMIN', 'DEPARTMENT_HEAD'] } },
+  const recipients = await prisma.user.findMany({
+    where: {
+      isActive: true,
+      OR: [
+        { role: 'ADMIN' },
+        {
+          role: 'DEPARTMENT_HEAD',
+          ...(updated.responsibleDepartment
+            ? { facultyDepartment: updated.responsibleDepartment }
+            : { departmentId: updated.departmentId }),
+        },
+      ],
+    },
     select: { id: true },
   });
   await Promise.all(
-    admins.map((admin) =>
+    recipients.map((u) =>
       createNotification(
-        admin.id,
+        u.id,
         NotificationType.SYSTEM_ALERT,
         'Course Updated',
         `Course ${updated.courseCode} — ${updated.title} has been updated.`,

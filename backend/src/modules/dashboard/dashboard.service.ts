@@ -2,11 +2,22 @@ import { Role } from '@prisma/client';
 import { prisma } from '../../config/database';
 import { ApiError } from '../../utils/ApiError';
 import type { AuthUser } from '../../middleware/authenticate';
+import { expireEndedSemesters, getLastEndedSemester } from '../semesters/semesters.service';
 
-export async function getSummary(user: AuthUser) {
+export async function getSummary(user: AuthUser, query: Record<string, unknown> = {}) {
   const deptFilter = user.role === Role.DEPARTMENT_HEAD ? { departmentId: user.departmentId } : {};
 
+  await expireEndedSemesters();
   const activeSemester = await prisma.semester.findFirst({ where: { isCurrent: true } });
+  const lastEndedSemester = activeSemester ? null : await getLastEndedSemester();
+
+  // Optionally view a past (or any specific) semester instead of the active one
+  const requestedId = query.semesterId as string | undefined;
+  let viewSemester = activeSemester;
+  if (requestedId) {
+    viewSemester = await prisma.semester.findUnique({ where: { id: requestedId } });
+    if (!viewSemester) throw ApiError.notFound('Semester not found');
+  }
 
   const [totalFaculty, totalCourses, pendingRequests, facultyWorkloads] = await Promise.all([
     prisma.user.count({ where: { role: Role.FACULTY, isActive: true, ...deptFilter } }),
@@ -19,21 +30,25 @@ export async function getSummary(user: AuthUser) {
         }),
       },
     }),
-    // Count overloaded/underloaded per faculty (not per record)
-    prisma.user.findMany({
-      where: { role: Role.FACULTY, isActive: true, ...deptFilter },
-      select: {
-        maxWeeklyHours: true,
-        minWeeklyHours: true,
-        workloadRecords: {
-          where: {
-            status: { not: 'CANCELLED' },
-            ...(activeSemester && { semesterId: activeSemester.id }),
+    // Count overloaded/underloaded per faculty (not per record).
+    // Only meaningful within one semester — when none is active, skip the
+    // query instead of summing hours across every semester combined.
+    viewSemester
+      ? prisma.user.findMany({
+          where: { role: Role.FACULTY, isActive: true, ...deptFilter },
+          select: {
+            maxWeeklyHours: true,
+            minWeeklyHours: true,
+            workloadRecords: {
+              where: {
+                status: { not: 'CANCELLED' },
+                semesterId: viewSemester.id,
+              },
+              select: { totalHours: true },
+            },
           },
-          select: { totalHours: true },
-        },
-      },
-    }),
+        })
+      : Promise.resolve([]),
   ]);
 
   let overloadedCount = 0;
@@ -44,7 +59,7 @@ export async function getSummary(user: AuthUser) {
     else if (total < f.minWeeklyHours) underloadedCount++;
   }
 
-  return { totalFaculty, totalCourses, pendingRequests, overloadedCount, underloadedCount, activeSemester };
+  return { totalFaculty, totalCourses, pendingRequests, overloadedCount, underloadedCount, activeSemester, viewSemester, lastEndedSemester };
 }
 
 export async function getWorkloadDistribution(user: AuthUser, query: Record<string, unknown>) {

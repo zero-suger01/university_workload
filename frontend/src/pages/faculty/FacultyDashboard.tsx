@@ -35,7 +35,7 @@ export default function FacultyDashboard() {
 
   const { data: _summary } = useQuery({
     queryKey: ['dashboard-summary'],
-    queryFn: dashboardApi.summary,
+    queryFn: () => dashboardApi.summary(),
   });
 
   const allWorkloads: any[] = data ?? [];
@@ -49,11 +49,19 @@ export default function FacultyDashboard() {
   const totalLab = workloads.reduce((s: number, w: any) => s + (w.assignedLabHours ?? 0), 0);
   const totalHours = totalLec + totalTut + totalLab;
 
+  // Most recently finished semester — shown when nothing is active so the
+  // empty dashboard reads as "semester ended", not "your workload vanished"
+  const lastEnded = !current
+    ? semesters
+        ?.filter((s: { endDate: string }) => new Date(s.endDate) < new Date())
+        .sort((a: { endDate: string }, b: { endDate: string }) => +new Date(b.endDate) - +new Date(a.endDate))[0]
+    : null;
+
   const maxHours = 36;
   const percent = Math.min(120, Math.round((totalHours / maxHours) * 100));
   const isOverloaded = totalHours > maxHours;
-  const isUnderloaded = totalHours < 12;
-  const gaugeColor = isOverloaded ? '#ef4444' : isUnderloaded ? '#f59e0b' : '#10b981';
+  const isUnderloaded = !!current && totalHours < 12;
+  const gaugeColor = !current ? '#9ca3af' : isOverloaded ? '#ef4444' : isUnderloaded ? '#f59e0b' : '#10b981';
 
   const breakdownData = [
     { name: t('lecture'), value: totalLec },
@@ -68,6 +76,18 @@ export default function FacultyDashboard() {
         <div className="bg-primary-50 border border-primary-200 rounded-lg px-3 py-2 text-xs sm:text-sm text-primary-700">
           {t('currentSemester')}:{' '}
           <span className="font-semibold">{current.name}</span>
+        </div>
+      )}
+      {semesters && !current && (
+        <div className="bg-amber-50 border border-amber-300 rounded-lg px-3 py-2 text-xs sm:text-sm text-amber-800">
+          {lastEnded ? (
+            <>
+              <span className="font-semibold">{lastEnded.name}</span> ended on{' '}
+              {new Date(lastEnded.endDate).toLocaleDateString()}. Your new workload will appear here once the next semester starts.
+            </>
+          ) : (
+            <>No active semester yet. Your workload will appear here once a semester starts.</>
+          )}
         </div>
       )}
 

@@ -65,7 +65,9 @@ export async function getUsers(query: Record<string, unknown>) {
 
   const [total, users] = await Promise.all([
     prisma.user.count({ where }),
-    prisma.user.findMany({ where, select: SELECT_SAFE, skip, take: limit, orderBy: { lastName: 'asc' } }),
+    // tempPassword included here only: the list route is admin/head-guarded,
+    // unlike GET /users/:id which any authenticated user can call
+    prisma.user.findMany({ where, select: { ...SELECT_SAFE, tempPassword: true }, skip, take: limit, orderBy: { lastName: 'asc' } }),
   ]);
 
   return { users, meta: buildMeta(total, page, limit) };
@@ -131,9 +133,23 @@ export async function updateUser(id: string, data: UpdateUserInput) {
   if (!user) throw ApiError.notFound('User not found');
 
   // Prisma expects undefined instead of null for optional fields
-  const updateData: Record<string, unknown> = { ...data };
+  const { password, ...rest } = data;
+  const updateData: Record<string, unknown> = { ...rest };
   for (const [key, value] of Object.entries(updateData)) {
     if (value === null || value === undefined || value === '') delete updateData[key];
+  }
+
+  // Password provided in edit form — actually apply it and refresh the
+  // Password Directory entry, then email (or console-log in dev) the credentials
+  if (password) {
+    updateData.passwordHash = await bcrypt.hash(password, 12);
+    updateData.tempPassword = password;
+    sendWelcomeEmail({
+      to: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      password,
+    }).catch((err) => console.error('[EmailService] Failed to send password email:', err));
   }
 
   const updated = await prisma.user.update({

@@ -60,7 +60,8 @@ const schema = z.object({
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
   email: z.string().email('Invalid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  // Blank = keep current password; non-blank = reset to this value
+  password: z.string().min(8, 'Password must be at least 8 characters').or(z.literal('')),
   departmentId: z.string().optional(),
   facultyDepartment: z.string().min(1, 'Department is required'),
   role: z.enum(['ADMIN', 'DEPARTMENT_HEAD', 'FACULTY']),
@@ -125,7 +126,7 @@ export default function EditFacultyModal({ faculty, onClose }: EditFacultyModalP
       firstName: faculty.firstName,
       lastName: faculty.lastName,
       email: faculty.email,
-      password: generatePassword(),
+      password: '',
       departmentId: faculty.department?.id,
       facultyDepartment: (faculty as any).facultyDepartment || faculty.department?.name || '',
       role: faculty.role as any,
@@ -159,6 +160,7 @@ export default function EditFacultyModal({ faculty, onClose }: EditFacultyModalP
   const mutation = useMutation({
     mutationFn: (data: FormData) => {
       const payload: Record<string, unknown> = { ...data };
+      if (!payload.password) delete payload.password;
       if (!payload.departmentId) delete payload.departmentId;
       if (!payload.gender) delete payload.gender;
       if (!payload.academicPosition) delete payload.academicPosition;
@@ -268,15 +270,28 @@ export default function EditFacultyModal({ faculty, onClose }: EditFacultyModalP
           <SectionHeader title="Account" />
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">
-              Temporary Password
-              <span className="ml-1 text-[10px] font-normal text-primary-600">(auto-generated · sent by email)</span>
+              Reset Password
+              <span className="ml-1 text-[10px] font-normal text-primary-600">(leave blank to keep current password)</span>
             </label>
+            {(faculty as any).tempPassword && (
+              <p className="text-xs text-gray-600 mb-2">
+                Current temporary password:{' '}
+                <span className="font-mono font-semibold tracking-widest">{(faculty as any).tempPassword}</span>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText((faculty as any).tempPassword).then(() => toast.success('Password copied to clipboard'))}
+                  className="ml-2 text-primary-600 hover:underline"
+                >
+                  copy
+                </button>
+              </p>
+            )}
             <div className="flex gap-2">
               <input
                 {...register('password')}
                 type="text"
+                placeholder="Unchanged"
                 className="input font-mono tracking-widest flex-1"
-                readOnly
               />
               <button
                 type="button"
@@ -296,7 +311,7 @@ export default function EditFacultyModal({ faculty, onClose }: EditFacultyModalP
               </button>
             </div>
             {errors.password && <p className="text-xs text-red-500 mt-1">{errors.password.message}</p>}
-            <p className="text-xs text-gray-400 mt-1">This password will be emailed to the faculty member upon saving.</p>
+            <p className="text-xs text-gray-400 mt-1">If set, the new password is applied on save and emailed to the faculty member.</p>
           </div>
         </div>
 

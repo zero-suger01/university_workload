@@ -1,7 +1,8 @@
 import api from './client';
 
 export const dashboardApi = {
-  summary: () => api.get('/dashboard/summary').then((r) => r.data.data),
+  summary: (semesterId?: string) =>
+    api.get('/dashboard/summary', { params: semesterId ? { semesterId } : {} }).then((r) => r.data.data),
 
   workloadDistribution: (semesterId: string) =>
     api.get('/dashboard/workload-distribution', { params: { semesterId } }).then((r) => r.data.data),

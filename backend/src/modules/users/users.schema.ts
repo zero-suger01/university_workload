@@ -23,7 +23,11 @@ export const createUserSchema = z.object({
 export const updateUserSchema = createUserSchema
   .omit({ password: true, employeeId: true })
   .partial()
-  .extend({ isActive: z.boolean().optional() });
+  .extend({
+    isActive: z.boolean().optional(),
+    // Optional — when provided, resets the user's password (and Password Directory entry)
+    password: z.string().min(8).optional(),
+  });
 
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;

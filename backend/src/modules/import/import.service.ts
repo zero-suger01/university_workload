@@ -1,7 +1,17 @@
 // @ts-nocheck
 import ExcelJS from 'exceljs';
 import * as XLSX from 'xlsx';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { prisma } from '../../config/database';
+
+// Same alphabet as users.service generatePassword — no ambiguous chars (0/O, 1/I/l)
+function generateImportPassword(length = 10): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  return Array.from(crypto.randomBytes(length))
+    .map((b) => chars[b % chars.length])
+    .join('');
+}
 
 // ─── Position Mapping ─────────────────────────────────────────────────────────
 // Maps any spelling/language variant of a position to AcademicPosition enum
@@ -204,13 +214,17 @@ export async function importFaculty(buffer: Buffer): Promise<ImportResult> {
         });
         result.updated++;
       } else {
+        // Real temp password so imported users can actually log in;
+        // stored in tempPassword for the admin Password Directory report
+        const plainPassword = generateImportPassword();
         await prisma.user.create({
           data: {
             employeeId,
             firstName,
             lastName,
             email,
-            passwordHash: '$2b$10$defaultPasswordHashForImport.xxxxx',
+            passwordHash: await bcrypt.hash(plainPassword, 12),
+            tempPassword: plainPassword,
             role: 'FACULTY',
             departmentId,
             ...(academicPosition && { academicPosition: academicPosition as any }),

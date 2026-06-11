@@ -4,6 +4,50 @@ import { ApiError } from '../../utils/ApiError';
 import { createNotification } from '../notifications/notifications.service';
 import type { SemesterInput } from './semesters.schema';
 
+// Auto-end the current semester once its endDate has passed.
+// Called on server startup, hourly, and before dashboard reads so the
+// transition happens without an admin having to click "deactivate".
+export async function expireEndedSemesters() {
+  const now = new Date();
+  const ended = await prisma.semester.findFirst({
+    where: { isCurrent: true, endDate: { lt: now } },
+  });
+  if (!ended) return null;
+
+  await prisma.semester.update({
+    where: { id: ended.id },
+    data: { isActive: false, isCurrent: false },
+  });
+
+  const recipients = await prisma.user.findMany({
+    where: { role: { in: ['ADMIN', 'DEPARTMENT_HEAD'] } },
+    select: { id: true },
+  });
+  await Promise.all(
+    recipients.map((u) =>
+      createNotification(
+        u.id,
+        NotificationType.SYSTEM_ALERT,
+        'Semester Ended',
+        `Semester ${ended.name} (${ended.academicYear}) ended on ${ended.endDate.toISOString().slice(0, 10)}. Please activate the next semester.`,
+        { semesterId: ended.id, semesterName: ended.name },
+      ),
+    ),
+  );
+
+  console.log(`📅 Semester "${ended.name}" auto-ended (endDate passed)`);
+  return ended;
+}
+
+// Most recently finished semester — used by dashboards to explain an
+// empty state when nothing is currently active.
+export async function getLastEndedSemester() {
+  return prisma.semester.findFirst({
+    where: { endDate: { lt: new Date() } },
+    orderBy: { endDate: 'desc' },
+  });
+}
+
 export async function getAll() {
   return prisma.semester.findMany({ orderBy: [{ academicYear: 'desc' }, { term: 'asc' }] });
 }
